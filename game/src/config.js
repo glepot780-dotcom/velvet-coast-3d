@@ -19,6 +19,16 @@ export const STREETS_X = [-200, -120, -40, 40, 120, 180];
 export const STREETS_Z = [-160, -80, 0, 80, 160];
 export const STREET_HALF = 7; // half-width of a road
 
+/** Street names for the city map (X = north-south roads, Z = east-west). */
+export const STREET_NAMES_X = [
+  { x: -200, name: 'COAST RD' }, { x: -120, name: 'PALM BLVD' }, { x: -40, name: 'OLD TOWN RD' },
+  { x: 40, name: 'NEON AVE' }, { x: 120, name: 'HARBOR RD' }, { x: 180, name: 'AIRFIELD RD' },
+];
+export const STREET_NAMES_Z = [
+  { z: -160, name: 'CRESTVIEW RD' }, { z: -80, name: 'CASINO ROW' }, { z: 0, name: 'TIDE ST' },
+  { z: 80, name: 'MARINA RD' }, { z: 160, name: 'BAYVIEW DR' },
+];
+
 /** Named districts, each with a centre, a colour for the map and a one-line flavour. */
 export const DISTRICTS = [
   { name: 'Driftwood Beach', cx: -238, cz: 0, color: '#e8c98a', blurb: 'Sun, sand and fast cars on the strip' },
@@ -35,6 +45,8 @@ export const PLACES = {
   garageDoor: { x: 120, z: 96, name: "Ivy's Garage — forecourt" },
   safehouse: { x: -60, z: -178, name: 'Safehouse' },
   hospital: { x: 60, z: -96, name: 'Meridian General' },
+  bank: { x: 80, z: -40, name: 'Meridian Bay Bank' },
+  policeHQ: { x: 150, z: 120, name: 'VCPD Headquarters' },
   marina: { x: -252, z: 140, name: 'Harbor Lights Marina' },
   airfield: { x: 222, z: 30, name: 'Meridian Airfield' },
   beachHut: { x: -242, z: 0, name: 'Lifeguard Hut' },
@@ -84,6 +96,7 @@ export const CHARACTERS = {
   priya: { name: 'PRIYA NAIR', role: 'HACKER', color: '#4fc3f7', initial: 'PN', line: 'Cameras, alarms, vaults — all just doors.' },
   marcus: { name: 'MARCUS HALE', role: 'MUSCLE', color: '#7fb069', initial: 'MH', line: 'Talk soft. Carry something loud.' },
   voss: { name: 'CHIEF ELENA VOSS', role: 'MERIDIAN PD', color: '#8b93a3', initial: 'EV', line: 'All units: box that car in. Now.' },
+  officer: { name: 'OFFICER DANA REYES', role: 'VCPD · FOOT PATROL', color: '#1d4ed8', initial: 'DR', line: 'On foot now. You are not walking away from this.' },
 };
 
 /** Radio stations (procedural WebAudio, no files). */
@@ -161,7 +174,7 @@ export const MISSIONS = [
     id: 7, day: 3, title: 'THE BIG TIDE', giver: 'ivy', pay: 5000,
     brief: 'The Azure Tide Casino vault. Take the loot, lose the city, and deliver it to the yacht at Harbor Lights. Then we are done.',
     stages: [
-      { kind: 'goto', label: 'Hit the Azure Tide Casino vault', x: 0, z: -40, r: 10 },
+      { kind: 'goto', label: 'Hit the Azure Tide Casino vault', x: 0, z: -40, r: 22 },
       { kind: 'combat', label: 'Hold the casino floor — take out the guards (0/5)', x: 0, z: -40, r: 45, count: 5 },
       { kind: 'timed', label: 'Deliver the loot to the yacht at Harbor Lights', x: -252, z: 140, r: 10, seconds: 150 },
     ],
@@ -172,13 +185,13 @@ export const MISSIONS = [
 /** Dusk look: sun low in the west, warm light, purple sky. */
 export const DUSK = {
   timeOfDay: 18.6, // hours
-  sunDir: [-0.85, 0.28, -0.35], // from the west, low
-  sunColor: [1.0, 0.62, 0.34],
-  ambient: [0.5, 0.44, 0.58],
+  sunDir: [-0.88, 0.22, -0.35], // from the west, low
+  sunColor: [1.05, 0.58, 0.28],
+  ambient: [0.46, 0.4, 0.54],
   skyTop: [0.16, 0.12, 0.32],
   skyHorizon: [1.0, 0.55, 0.3],
   fogColor: [0.85, 0.5, 0.38],
-  fogNear: 120, fogFar: 700,
+  fogNear: 150, fogFar: 850,
 };
 
 export const PALETTE = {

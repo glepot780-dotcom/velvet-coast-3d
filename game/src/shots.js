@@ -5,8 +5,11 @@
 // Alif's directions for these shots:
 //  1 menu    — the MAIN MENU: the character in front of the car, a helicopter
 //              in the sky, sunset, city behind. NO airplane in this shot.
-//  2 chase   — a police chase on the coast road: sea/beach + boats clearly
-//              visible, minimap visible, wanted stars, mission timer.
+//  2 chase   — MISSION FAILED on the main road: Jax on foot in the middle
+//              of the NEON AVE x TIDE ST intersection, boxed in by five
+//              police cars on the asphalt and four officers closing in,
+//              helicopter overhead, five stars, MISSION FAILED banner.
+//              On the road, NOT on the beach. (Alif's directions.)
 //  3 weapons — the moment of switching weapons: the weapon wheel OPEN, slots
 //              visible, one highlighted.
 //  4 map     — the full city map screen.
@@ -15,13 +18,6 @@ import { resetWorld, setTitleCamera } from './world.js';
 import { addHeat } from './police.js';
 import { startMission } from './missions.js';
 import { makeCar } from './traffic.js';
-
-/** The autopilot input for the chase scene: foot down, straight ahead. */
-const CHASE_INPUT = {
-  moveX: 0, moveY: 1,
-  sprint: false, handbrake: false, mouseActive: false,
-  shoot: false, enter: false,
-};
 
 function settle(state, seconds, input) {
   const steps = Math.round(seconds / STEP);
@@ -45,70 +41,57 @@ export function stageShot(name, state, stepWorld) {
   state.respect = 4;
 
   if (name === 'chase') {
-    // Mission 2, COAST RUN: a timed delivery up the coast road, three stars.
-    // The run angles north-west along the beach, west of the palm line, so
-    // the camera looks up the shoreline: sea + beach on the left, the city
-    // set back on the right. Driving straight north put the car beside a
-    // 25 m building whose west face (x -192) filled the whole right third;
-    // driving on the roadside palm line (x -238) put a palm trunk dead
-    // centre. Starting 15 m west of the road keeps the camera clear of
-    // both: the palms fall to the right edge and the sea fills the left.
-    // The mission starts AFTER the settle, not before: the beach run passes
-    // straight through the Lifeguard Hut (-242, 0), the COAST RUN
-    // destination, so starting it before the settle completes the job
-    // mid-run and the HUD would show the next job instead of MISSION 2/7
-    // with its timer. The wanted level comes from addHeat, not the mission.
-    const car = state.starterCar;
-    car.kind = 'player';
-    car.x = -215; car.z = 90; car.angle = -Math.PI / 2 - 0.30; car.speed = 26;
-    state.player.car = car;
-    state.player.onFoot = false;
-    state.player.x = car.x; state.player.z = car.z; state.player.angle = car.angle;
-    addHeat(state, 3);
-    state.radioLine = 'Dispatch: three stars, roadblocks up — box that car in, all units.';
-    // Two pursuit cars ahead on the beach that the player is about to catch.
-    const spots = [[-232.8, 32.7, 40], [-238.7, 13.6, 40]];
-    for (const [x, z, speed] of spots) {
-      const pc = makeCar('police', { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 }, x, z, -Math.PI / 2);
-      pc.speed = speed;
+    // MISSION FAILED on the main road (Alif: "dijalan raya ya mo jangan di
+    // pantai", "mission failed dikepung polisi", "kasih mobil polisinya
+    // juga"). Jax on foot in the middle of the NEON AVE x TIDE ST
+    // intersection, boxed in by five VCPD interceptors on the asphalt and
+    // four officers closing in on foot, helicopter overhead, five stars,
+    // MISSION FAILED banner from the HUD (state.failedBanner). Nothing is
+    // settled forward: the shot paints the staged state exactly, so every
+    // position here is final. Every car sits on the road, never inside a
+    // building block; the south side stays open for the camera.
+    startMission(state, 5); // HEAT WAVE: four stars, helicopter, escape
+    state.missions.banner = null;
+    state.dialogue = null;
+    addHeat(state, 1); // five stars in all
+    // Jax on foot in the middle of the intersection, facing the camera.
+    state.player.x = 40; state.player.z = 0; state.player.angle = Math.PI / 2;
+    state.player.onFoot = true; state.player.car = null; state.player.speed = 0;
+    // Five interceptors boxed in around him, all on the asphalt, facing in:
+    // three blocking Neon Ave ahead of him, one each side on Tide St —
+    // pulled in to ~34° off the camera axis so they read in frame, not as
+    // slivers at the edges.
+    const ring = [
+      [40, -13, Math.PI / 2], [40, -26, Math.PI / 2], [40, -38, Math.PI / 2],
+      [30, -4, 0], [50, -4, Math.PI],
+    ];
+    for (const [x, z, angle] of ring) {
+      const pc = makeCar('police', { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 }, x, z, angle);
+      pc.speed = 0;
       state.cars.push(pc);
       state.police.cars.push(pc.id);
     }
-    // The helicopter overhead.
+    // Four officers on foot, closing in from every side of the intersection.
+    const officers = [
+      [36, 4, -Math.PI / 4], [44, 4, -3 * Math.PI / 4],
+      [36, -4, Math.PI / 4], [44, -4, 3 * Math.PI / 4],
+    ];
+    for (const [x, z, angle] of officers) {
+      state.police.officers.push({ x, z, angle, bust: 0 });
+    }
+    // The helicopter overhead, directly above the road ahead so it stays
+    // inside the frame (high and off-axis puts it above the top edge) and
+    // clear of every building.
     state.police.heli.active = true;
-    state.police.heli.x = -196; state.police.heli.z = 30; state.police.heli.y = 46;
-    // A big sailboat moored in the open water, ahead-left of the chase, so it
-    // reads unmistakably in the frame. The sailing boat used to drift out of
-    // frame on its orbit during the settle, so it is moored for this shot.
-    const sail = state.boats[4];
-    sail.moored = true;
-    sail.x = -281; sail.z = -57; sail.y = -0.4; sail.angle = -0.9; sail.size = 1.8;
-    // One pursuit car ahead on the beach, in frame, that the player is about
-    // to overtake.
-    const ahead = makeCar('police', { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 }, -256, -44, -Math.PI / 2 - 0.30);
-    ahead.speed = 30;
-    state.cars.push(ahead);
-    state.police.cars.push(ahead.id);
-    settle(state, 3, CHASE_INPUT);
-    // Frame the helicopter: low and ahead-left over the water so it reads
-    // against the sky, not against the buildings.
-    state.police.heli.x = -275; state.police.heli.y = 22; state.police.heli.z = -62;
+    state.police.heli.x = 40; state.police.heli.y = 20; state.police.heli.z = -45;
     state.police.heli.angle = Math.PI * 0.75;
-    // Pull the chase camera in a little for the shot: the smoothed chase
-    // camera trails ~14 m behind a car at full speed, which shrinks the
-    // player car to a speck. 11 m keeps the car prominent without putting
-    // the lens on the palm line.
-    const fx = Math.cos(car.angle), fz = Math.sin(car.angle);
-    state.camera.x = car.x - fx * 11;
-    state.camera.z = car.z - fz * 11;
-    state.camera.y = 2.8;
-    state.camera.lx = car.x + fx * 6;
-    state.camera.ly = 1.6;
-    state.camera.lz = car.z + fz * 6;
-    startMission(state, 1);
-    state.missions.timer = 64;
-    state.missions.banner = null;
-    state.dialogue = null;
+    state.radioLine = 'Dispatch: FIVE STARS. Air-1 overhead. Nobody lets this one go.';
+    state.failedBanner = { title: 'MISSION FAILED', sub: 'Boxed in on Neon Ave. The VCPD has you now.' };
+    // Camera just outside the ring on the south side, low and close, looking
+    // north up Neon Ave: Jax centre-frame below the banner, the ring around
+    // him, the road and the buildings running away behind.
+    state.camera.x = 40; state.camera.y = 4.2; state.camera.z = 11;
+    state.camera.lx = 40; state.camera.ly = 1.0; state.camera.lz = -4;
     state.screen = 'play';
     return 'play';
   }

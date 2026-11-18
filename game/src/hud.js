@@ -3,7 +3,8 @@
 // 1280x720 logical space scaled to the window. drawHud returns the clickable
 // buttons of the current screen so main.js can hit-test them.
 import {
-  CHARACTERS, DISTRICTS, FONT, GARAGE_ITEMS, MISSIONS, PLACES, RADIO, WEAPONS, WORLD,
+  CHARACTERS, DISTRICTS, FONT, GARAGE_ITEMS, MISSIONS, PLACES, RADIO,
+  STREET_NAMES_X, STREET_NAMES_Z, WEAPONS, WORLD,
 } from './config.js';
 import { currentMission, currentStage, objectiveTarget, objectiveText } from './missions.js';
 import { responseList } from './police.js';
@@ -86,10 +87,23 @@ function portrait(ctx, key, x, y, size, showName = true, label = null) {
   ctx.beginPath();
   ctx.arc(cx, cy, size * 0.26, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = key === 'ivy' ? '#2b2b33' : key === 'priya' ? '#1f2a44' : '#3a2a1a';
-  ctx.beginPath();
-  ctx.arc(cx, cy - size * 0.08, size * 0.26, Math.PI, 0);
-  ctx.fill();
+  if (key === 'officer') {
+    // Peaked cap with a gold badge dot.
+    ctx.fillStyle = '#141a2e';
+    ctx.beginPath();
+    ctx.arc(cx, cy - size * 0.08, size * 0.26, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(cx - size * 0.26, cy - size * 0.08, size * 0.52, size * 0.05);
+    ctx.fillStyle = '#ffd27a';
+    ctx.beginPath();
+    ctx.arc(cx, cy - size * 0.16, size * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = key === 'ivy' ? '#2b2b33' : key === 'priya' ? '#1f2a44' : '#3a2a1a';
+    ctx.beginPath();
+    ctx.arc(cx, cy - size * 0.08, size * 0.26, Math.PI, 0);
+    ctx.fill();
+  }
   ctx.fillStyle = '#14161a';
   ctx.beginPath();
   ctx.arc(cx - size * 0.1, cy, size * 0.035, 0, Math.PI * 2);
@@ -171,9 +185,9 @@ function drawMinimap(ctx, state, cx, cy, r) {
   ctx.fillStyle = '#c9a86a';
   ctx.fillRect(toX(WORLD.minX), toY(WORLD.minZ), (WORLD.beachX - WORLD.minX) * scale, (WORLD.maxZ - WORLD.minZ) * scale);
   ctx.fillRect(toX(WORLD.minX), toY(WORLD.beachZ), (WORLD.maxX - WORLD.minX) * scale, (WORLD.maxZ - WORLD.beachZ) * scale);
-  // Roads.
-  ctx.strokeStyle = 'rgba(20, 22, 28, 0.85)';
-  ctx.lineWidth = 3;
+  // Roads: solid black, thick — they must read at a glance.
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 4;
   for (const x of [-200, -120, -40, 40, 120, 180]) {
     ctx.beginPath();
     ctx.moveTo(toX(x), toY(WORLD.minZ));
@@ -211,6 +225,27 @@ function drawMinimap(ctx, state, cx, cy, r) {
     ctx.fillStyle = '#ff2d2d';
     ctx.beginPath();
     ctx.arc(toX(car.x), toY(car.z), 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Landmark dots: bank, hospital, police HQ.
+  for (const [dx, dz, col] of [
+    [PLACES.bank.x, PLACES.bank.z, '#ffd27a'],
+    [PLACES.hospital.x, PLACES.hospital.z, '#7ee2a8'],
+    [PLACES.policeHQ.x, PLACES.policeHQ.z, '#5b8cff'],
+  ]) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(toX(dx), toY(dz), 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#14161a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  // On-foot officers: smaller red dots.
+  for (const off of state.police.officers) {
+    ctx.fillStyle = '#ff2d2d';
+    ctx.beginPath();
+    ctx.arc(toX(off.x), toY(off.z), 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
   // The player arrow.
@@ -294,13 +329,40 @@ function drawMapScreen(ctx, state) {
   ctx.fillStyle = '#c9a86a';
   ctx.fillRect(toX(WORLD.minX), toY(WORLD.minZ), (WORLD.beachX - WORLD.minX) * scale, (WORLD.maxZ - WORLD.minZ) * scale);
   ctx.fillRect(toX(WORLD.minX), toY(WORLD.beachZ), (WORLD.maxX - WORLD.minX) * scale, (WORLD.maxZ - WORLD.beachZ) * scale);
-  ctx.strokeStyle = 'rgba(20, 22, 28, 0.8)';
-  ctx.lineWidth = 4;
-  for (const x of [-200, -120, -40, 40, 120, 180]) {
+  // Minor streets: a finer grid so the map reads as a real city, not empty
+  // blocks — kept to the land, off the beach sand and the airfield.
+  ctx.strokeStyle = 'rgba(10, 12, 18, 0.4)';
+  ctx.lineWidth = 1.5;
+  for (let x = -160; x <= 200; x += 40) {
+    if ([-200, -120, -40, 40, 120, 180].includes(x)) continue;
     ctx.beginPath(); ctx.moveTo(toX(x), toY(WORLD.minZ)); ctx.lineTo(toX(x), toY(WORLD.maxZ)); ctx.stroke();
   }
-  for (const z of [-160, -80, 0, 80, 160]) {
+  for (let z = -200; z <= 160; z += 40) {
+    if ([-160, -80, 0, 80, 160].includes(z)) continue;
     ctx.beginPath(); ctx.moveTo(toX(WORLD.minX), toY(z)); ctx.lineTo(toX(WORLD.maxX), toY(z)); ctx.stroke();
+  }
+  // Main roads: white casing, then solid black, thick — unmistakable.
+  for (const [edge, core] of [['rgba(255,255,255,0.9)', 9], ['#000000', 7]]) {
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = core;
+    for (const x of [-200, -120, -40, 40, 120, 180]) {
+      ctx.beginPath(); ctx.moveTo(toX(x), toY(WORLD.minZ)); ctx.lineTo(toX(x), toY(WORLD.maxZ)); ctx.stroke();
+    }
+    for (const z of [-160, -80, 0, 80, 160]) {
+      ctx.beginPath(); ctx.moveTo(toX(WORLD.minX), toY(z)); ctx.lineTo(toX(WORLD.maxX), toY(z)); ctx.stroke();
+    }
+  }
+  // Street names on the roads: white on black, along the top edge (vertical
+  // roads) and the left-middle (east-west roads), clear of district labels.
+  for (const { x, name } of STREET_NAMES_X) {
+    ctx.save();
+    ctx.translate(toX(x), toY(-192));
+    ctx.rotate(-Math.PI / 2);
+    text(ctx, name, 0, 3, 9, '#ffffff', 800, 'center');
+    ctx.restore();
+  }
+  for (const { z, name } of STREET_NAMES_Z) {
+    text(ctx, name, toX(-100), toY(z), 9, '#ffffff', 800, 'center');
   }
   // Runway + piers.
   ctx.strokeStyle = '#d8dde2';
@@ -311,9 +373,10 @@ function drawMapScreen(ctx, state) {
   for (const pz of [118, 140, 162]) {
     ctx.beginPath(); ctx.moveTo(toX(-258), toY(pz)); ctx.lineTo(toX(-286), toY(pz)); ctx.stroke();
   }
-  // District labels.
+  // District labels, with a dark shadow so they read over sand and runway.
   for (const d of DISTRICTS) {
-    text(ctx, d.name.toUpperCase(), toX(d.cx), toY(d.cz), 12, 'rgba(255,255,255,0.9)', 800, 'center');
+    text(ctx, d.name.toUpperCase(), toX(d.cx) + 1, toY(d.cz) + 1, 12, 'rgba(0,0,0,0.75)', 800, 'center');
+    text(ctx, d.name.toUpperCase(), toX(d.cx), toY(d.cz), 12, 'rgba(255,255,255,0.95)', 800, 'center');
   }
   // Route from the player to the objective.
   const target = objectiveTarget(state);
@@ -350,6 +413,12 @@ function drawMapScreen(ctx, state) {
   marker(PLACES.safehouse.x, PLACES.safehouse.z, 'S', '#7fb069');
   marker(PLACES.airfield.x, PLACES.airfield.z, 'A', '#9b8cf2');
   marker(PLACES.marina.x, PLACES.marina.z, 'M', '#4fc3f7');
+  marker(PLACES.bank.x, PLACES.bank.z, '$', '#ffd27a');
+  marker(PLACES.policeHQ.x, PLACES.policeHQ.z, 'P', '#5b8cff');
+  marker(PLACES.casino.x, PLACES.casino.z, 'C', '#ff5fa2');
+  text(ctx, 'BANK', toX(PLACES.bank.x), toY(PLACES.bank.z) + 22, 10, '#ffffff', 800, 'center');
+  text(ctx, 'HOSPITAL', toX(PLACES.hospital.x), toY(PLACES.hospital.z) + 22, 10, '#ffffff', 800, 'center');
+  text(ctx, 'VCPD HQ', toX(PLACES.policeHQ.x), toY(PLACES.policeHQ.z) + 22, 10, '#ffffff', 800, 'center');
   for (const boat of state.boats) {
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
@@ -375,20 +444,22 @@ function drawMapScreen(ctx, state) {
   panel(ctx, 990, 96, 250, 520);
   text(ctx, 'LEGEND', 1010, 126, 15, TEAL, 800);
   const legend = [
-    ['▶', 'You are here', '#ffffff'], ['P', 'Story contact', GOLD], ['◉', 'Job objective', GOLD],
+    ['▶', 'You are here', '#ffffff'], ['◆', 'Story contact', GOLD], ['◉', 'Job objective', GOLD],
     ['G', 'Garage / respray', '#ff5fa2'], ['H', 'Hospital', '#7ee2a8'], ['S', 'Safehouse', '#7fb069'],
-    ['A', 'Airfield', '#9b8cf2'], ['M', 'Marina', '#4fc3f7'], ['●', 'Police', '#ff2d2d'], ['○', 'Boat', '#ffffff'],
+    ['A', 'Airfield', '#9b8cf2'], ['M', 'Marina', '#4fc3f7'], ['$', 'Bank', '#ffd27a'],
+    ['P', 'VCPD Headquarters', '#5b8cff'], ['C', 'Casino', '#ff5fa2'],
+    ['●', 'Police', '#ff2d2d'], ['○', 'Boat', '#ffffff'],
   ];
   legend.forEach(([g, label, col], i) => {
-    text(ctx, g, 1014, 154 + i * 26, 14, col, 900);
-    text(ctx, label, 1038, 154 + i * 26, 13, '#eef1f5', 600);
+    text(ctx, g, 1014, 150 + i * 22, 14, col, 900);
+    text(ctx, label, 1038, 150 + i * 22, 13, '#eef1f5', 600);
   });
-  text(ctx, 'STATS', 1010, 440, 15, TEAL, 800);
-  text(ctx, `Cash  $${state.money.toLocaleString('en-US')}`, 1010, 468, 14, '#ffffff', 700);
-  text(ctx, `Respect  level ${state.respect}`, 1010, 492, 14, '#ffffff', 700);
-  text(ctx, `Cars owned  ${state.ownedCars.length}`, 1010, 516, 14, '#ffffff', 700);
-  text(ctx, `Shots fired  ${state.stats.shots}`, 1010, 540, 14, '#ffffff', 700);
-  text(ctx, `Cars stolen  ${state.stats.stolen}`, 1010, 564, 14, '#ffffff', 700);
+  text(ctx, 'STATS', 1010, 448, 15, TEAL, 800);
+  text(ctx, `Cash  $${state.money.toLocaleString('en-US')}`, 1010, 474, 14, '#ffffff', 700);
+  text(ctx, `Respect  level ${state.respect}`, 1010, 498, 14, '#ffffff', 700);
+  text(ctx, `Cars owned  ${state.ownedCars.length}`, 1010, 522, 14, '#ffffff', 700);
+  text(ctx, `Shots fired  ${state.stats.shots}`, 1010, 546, 14, '#ffffff', 700);
+  text(ctx, `Cars stolen  ${state.stats.stolen}`, 1010, 570, 14, '#ffffff', 700);
   return [];
 }
 
@@ -466,7 +537,20 @@ function drawPlayHud(ctx, state) {
     });
   }
 
-  // Money + wanted, top-right.
+  // MISSION FAILED banner (the staged failed shot): big, bold, impossible
+  // to miss — a wide dark plate across the upper-middle of the screen, the
+  // title in huge red capitals with a one-line reason under it. It sits
+  // clear of the mission panel (left), the money panel (right) and the
+  // player, who is framed lower in the shot.
+  if (state.failedBanner) {
+    const b = state.failedBanner;
+    panel(ctx, 340, 160, 600, 108, 'rgba(255, 91, 91, 0.85)');
+    text(ctx, b.title, 640, 222, 60, '#ff5b5b', 900, 'center');
+    text(ctx, b.sub, 640, 250, 14, '#ffffff', 700, 'center');
+  }
+
+  // Money + wanted, top-right, on a dark plate so it reads over the sky.
+  panel(ctx, W - 330, 14, 314, 148, 'rgba(255,255,255,0.25)');
   text(ctx, `DAY ${state.day} · ${clockText(state)}`, W - 16, 36, 14, '#ffffff', 800, 'right');
   text(ctx, `$${state.money.toLocaleString('en-US')}`, W - 16, 74, 34, GREEN, 900, 'right');
   for (let i = 0; i < 5; i += 1) star(ctx, W - 16 - (4 - i) * 30, 100, 11, i < state.wanted);
@@ -631,7 +715,7 @@ function drawTitle(ctx, state, ui) {
 
   // Crew row, bottom.
   text(ctx, 'YOUR CREW', 60, 592, 14, '#ffffff', 800);
-  const crew = [['jax', 'JAX'], ['ivy', 'IVY'], ['dante', 'DANTE'], ['priya', 'PRIYA'], ['marcus', 'MARCUS'], ['voss', 'VOSS']];
+  const crew = [['jax', 'JAX'], ['ivy', 'IVY'], ['dante', 'DANTE'], ['priya', 'PRIYA'], ['marcus', 'MARCUS'], ['voss', 'VOSS'], ['officer', 'REYES']];
   crew.forEach(([key, label], i) => {
     portrait(ctx, key, 60 + i * 96, 606, 72, true, label);
   });

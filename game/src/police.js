@@ -2,7 +2,7 @@
 // helicopter. Crimes add heat; heat crosses whole stars; stars bring cars.
 // The helicopter arrives at three stars and never leaves while you are hot.
 import { WANTED } from './config.js';
-import { makeCar } from './traffic.js';
+import { insideBuilding, makeCar, resolveBuildings } from './traffic.js';
 
 const POLICE_MODEL = { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 };
 
@@ -12,6 +12,9 @@ export function createPolice() {
     cars: [], // pursuit car ids (the cars themselves live in state.cars)
     heli: { active: false, x: 0, z: 0, y: 46, angle: 0, rotor: 0, orbit: 0 },
     roadblocks: [], // {x, z, angle, carIds}
+    officers: [], // on-foot officers {x, z, angle, bust}
+    officerTimer: 0,
+    officerAnnounced: false,
     spawnTimer: 0,
     cleanTimer: 0,
     seen: false,
@@ -35,6 +38,8 @@ export function dropWanted(state, stars) {
     state.cars = state.cars.filter((c) => c.kind !== 'gone');
     state.police.cars = [];
     state.police.roadblocks = [];
+    state.police.officers = [];
+    state.police.officerAnnounced = false;
     state.police.heli.active = false;
   }
 }
@@ -84,6 +89,26 @@ function spawnRoadblock(state, px, pz, playerAngle) {
   state.police.roadblocks.push({ x: cx, z: cz, angle: perp, carIds: ids });
 }
 
+function spawnOfficer(state, px, pz) {
+  // On a street near the player, 15–30 m out, never inside a building.
+  let spot = [px + 20, pz];
+  for (let i = 0; i < 8; i += 1) {
+    const a = state.rng() * Math.PI * 2;
+    const d = 15 + state.rng() * 15;
+    const x = px + Math.cos(a) * d, z = pz + Math.sin(a) * d;
+    if (x > -255 && x < 255 && z > -205 && z < 205 && !insideBuilding(state.buildings, x, z, 1)) {
+      spot = [x, z];
+      break;
+    }
+  }
+  state.police.officers.push({ x: spot[0], z: spot[1], angle: 0, bust: 0 });
+  if (!state.police.officerAnnounced) {
+    state.police.officerAnnounced = true;
+    state.dialogue = { who: 'officer', text: 'On foot now. You are not walking away from this.', until: state.time + 4 };
+    state.radioLine = 'Dispatch: foot patrol converging on the suspect.';
+  }
+}
+
 /** One police step: keep the right number of pursuit cars, move them toward the
  * player, lay roadblocks at four stars and above, fly the helicopter. */
 export function stepPolice(state, dt) {
@@ -93,6 +118,8 @@ export function stepPolice(state, dt) {
 
   if (state.wanted <= 0) {
     police.heli.active = false;
+    police.officers = [];
+    police.officerAnnounced = false;
     return;
   }
 
@@ -134,6 +161,36 @@ export function stepPolice(state, dt) {
         pc.z += (dz / dist) * -2.5 * dt * 10;
       }
     }
+  }
+
+  // On-foot officers: they deploy at two stars and above while you are on
+  // foot, chase you down and cuff you if they hold you for 1.2 s. You can
+  // outrun them by sprinting or by getting in a car.
+  const wantOfficers = player.onFoot ? Math.min(4, state.wanted) : 0;
+  police.officerTimer -= dt;
+  if (police.officers.length < wantOfficers && police.officerTimer <= 0) {
+    spawnOfficer(state, px, pz);
+    police.officerTimer = 2;
+  }
+  for (const off of police.officers) {
+    const dx = px - off.x, dz = pz - off.z;
+    const d = Math.hypot(dx, dz) || 1;
+    off.angle = Math.atan2(dz, dx);
+    if (d > 1.8) {
+      off.x += (dx / d) * 7.5 * dt;
+      off.z += (dz / d) * 7.5 * dt;
+      off.bust = 0;
+    } else {
+      off.bust = (off.bust ?? 0) + dt;
+      if (off.bust > 1.2) {
+        // Cuffed: the bust plays out like being caught with no health.
+        state.player.hp = 0;
+        state.radioLine = 'Officer Reyes: you are coming with us. Hands where I can see them.';
+      }
+    }
+    resolveBuildings(state.buildings, off, 0.6);
+    off.x = Math.max(-255, Math.min(255, off.x));
+    off.z = Math.max(-205, Math.min(205, off.z));
   }
 
   // The helicopter: orbits the player, rotor spinning, searchlight on.
@@ -181,6 +238,11 @@ export function responseList(state) {
   if (state.police.heli.active) {
     out.unshift({ name: 'AIR-1', dist: Math.round(Math.hypot(state.police.heli.x - px, state.police.heli.z - pz)), doing: 'SEARCHLIGHT' });
   }
+  const offNames = ['REYES', 'KOVA', 'DUNN', 'SOL'];
+  state.police.officers.forEach((off, i) => {
+    const d = Math.round(Math.hypot(off.x - px, off.z - pz));
+    out.push({ name: `OFC ${offNames[i % offNames.length]}`, dist: d, doing: d < 4 ? 'CUFFING' : 'ON FOOT' });
+  });
   return out;
 }
 

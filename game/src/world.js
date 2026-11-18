@@ -381,13 +381,14 @@ function stepDriving(state, input, dt) {
   }
 }
 
-/** The chase camera: behind and above the player, smoothed. */
+/** The chase camera: close behind and above the player, smoothed, so the
+ * car and the player read big and the 3D depth is unmistakable. */
 function stepCamera(state, dt) {
   const p = state.player;
   const cam = state.camera;
   if (state.screen === 'title') return; // the title shot sets its own camera
-  const dist = p.onFoot ? 6.5 : 7;
-  const height = p.onFoot ? 2.8 : 3.0;
+  const dist = 6;
+  const height = 2.6;
   const fx = Math.cos(p.angle), fz = Math.sin(p.angle);
   const tx = p.x - fx * dist;
   const tz = p.z - fz * dist;
