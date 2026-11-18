@@ -19,16 +19,6 @@ export const STREETS_X = [-200, -120, -40, 40, 120, 180];
 export const STREETS_Z = [-160, -80, 0, 80, 160];
 export const STREET_HALF = 7; // half-width of a road
 
-/** Street names for the city map (X = north-south roads, Z = east-west). */
-export const STREET_NAMES_X = [
-  { x: -200, name: 'COAST RD' }, { x: -120, name: 'PALM BLVD' }, { x: -40, name: 'OLD TOWN RD' },
-  { x: 40, name: 'NEON AVE' }, { x: 120, name: 'HARBOR RD' }, { x: 180, name: 'AIRFIELD RD' },
-];
-export const STREET_NAMES_Z = [
-  { z: -160, name: 'CRESTVIEW RD' }, { z: -80, name: 'CASINO ROW' }, { z: 0, name: 'TIDE ST' },
-  { z: 80, name: 'MARINA RD' }, { z: 160, name: 'BAYVIEW DR' },
-];
-
 /** Named districts, each with a centre, a colour for the map and a one-line flavour. */
 export const DISTRICTS = [
   { name: 'Driftwood Beach', cx: -238, cz: 0, color: '#e8c98a', blurb: 'Sun, sand and fast cars on the strip' },
@@ -45,12 +35,12 @@ export const PLACES = {
   garageDoor: { x: 120, z: 96, name: "Ivy's Garage — forecourt" },
   safehouse: { x: -60, z: -178, name: 'Safehouse' },
   hospital: { x: 60, z: -96, name: 'Meridian General' },
-  bank: { x: 80, z: -40, name: 'Meridian Bay Bank' },
-  policeHQ: { x: 150, z: 120, name: 'VCPD Headquarters' },
   marina: { x: -252, z: 140, name: 'Harbor Lights Marina' },
   airfield: { x: 222, z: 30, name: 'Meridian Airfield' },
   beachHut: { x: -242, z: 0, name: 'Lifeguard Hut' },
   casino: { x: 0, z: -40, name: 'The Azure Tide Casino' },
+  bank: { x: 80, z: -40, name: 'Meridian Bay Bank' },
+  policeHQ: { x: 150, z: 120, name: 'VCPD Headquarters' },
   yacht: { x: -288, z: 140, name: 'Yacht "High Water"' },
 };
 
@@ -185,9 +175,9 @@ export const MISSIONS = [
 /** Dusk look: sun low in the west, warm light, purple sky. */
 export const DUSK = {
   timeOfDay: 18.6, // hours
-  sunDir: [-0.88, 0.22, -0.35], // from the west, low
-  sunColor: [1.05, 0.58, 0.28],
-  ambient: [0.46, 0.4, 0.54],
+  sunDir: [-0.85, 0.22, -0.35], // from the west, low
+  sunColor: [1.0, 0.58, 0.28],
+  ambient: [0.42, 0.36, 0.5],
   skyTop: [0.16, 0.12, 0.32],
   skyHorizon: [1.0, 0.55, 0.3],
   fogColor: [0.85, 0.5, 0.38],

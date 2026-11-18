@@ -1,8 +1,8 @@
 // The Meridian PD: wanted level, pursuit cars, roadblocks and the police
 // helicopter. Crimes add heat; heat crosses whole stars; stars bring cars.
 // The helicopter arrives at three stars and never leaves while you are hot.
-import { WANTED } from './config.js';
-import { insideBuilding, makeCar, resolveBuildings } from './traffic.js';
+import { STREETS_X, STREETS_Z, WANTED } from './config.js';
+import { makeCar } from './traffic.js';
 
 const POLICE_MODEL = { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 };
 
@@ -12,12 +12,13 @@ export function createPolice() {
     cars: [], // pursuit car ids (the cars themselves live in state.cars)
     heli: { active: false, x: 0, z: 0, y: 46, angle: 0, rotor: 0, orbit: 0 },
     roadblocks: [], // {x, z, angle, carIds}
-    officers: [], // on-foot officers {x, z, angle, bust}
-    officerTimer: 0,
-    officerAnnounced: false,
     spawnTimer: 0,
     cleanTimer: 0,
     seen: false,
+    officers: [], // foot patrol: {id, name, x, z, angle, cuff}
+    officerTimer: 0,
+    officerAnnounced: false,
+    nextOfficerId: 1,
   };
 }
 
@@ -39,7 +40,6 @@ export function dropWanted(state, stars) {
     state.police.cars = [];
     state.police.roadblocks = [];
     state.police.officers = [];
-    state.police.officerAnnounced = false;
     state.police.heli.active = false;
   }
 }
@@ -89,26 +89,6 @@ function spawnRoadblock(state, px, pz, playerAngle) {
   state.police.roadblocks.push({ x: cx, z: cz, angle: perp, carIds: ids });
 }
 
-function spawnOfficer(state, px, pz) {
-  // On a street near the player, 15–30 m out, never inside a building.
-  let spot = [px + 20, pz];
-  for (let i = 0; i < 8; i += 1) {
-    const a = state.rng() * Math.PI * 2;
-    const d = 15 + state.rng() * 15;
-    const x = px + Math.cos(a) * d, z = pz + Math.sin(a) * d;
-    if (x > -255 && x < 255 && z > -205 && z < 205 && !insideBuilding(state.buildings, x, z, 1)) {
-      spot = [x, z];
-      break;
-    }
-  }
-  state.police.officers.push({ x: spot[0], z: spot[1], angle: 0, bust: 0 });
-  if (!state.police.officerAnnounced) {
-    state.police.officerAnnounced = true;
-    state.dialogue = { who: 'officer', text: 'On foot now. You are not walking away from this.', until: state.time + 4 };
-    state.radioLine = 'Dispatch: foot patrol converging on the suspect.';
-  }
-}
-
 /** One police step: keep the right number of pursuit cars, move them toward the
  * player, lay roadblocks at four stars and above, fly the helicopter. */
 export function stepPolice(state, dt) {
@@ -119,7 +99,6 @@ export function stepPolice(state, dt) {
   if (state.wanted <= 0) {
     police.heli.active = false;
     police.officers = [];
-    police.officerAnnounced = false;
     return;
   }
 
@@ -163,36 +142,6 @@ export function stepPolice(state, dt) {
     }
   }
 
-  // On-foot officers: they deploy at two stars and above while you are on
-  // foot, chase you down and cuff you if they hold you for 1.2 s. You can
-  // outrun them by sprinting or by getting in a car.
-  const wantOfficers = player.onFoot ? Math.min(4, state.wanted) : 0;
-  police.officerTimer -= dt;
-  if (police.officers.length < wantOfficers && police.officerTimer <= 0) {
-    spawnOfficer(state, px, pz);
-    police.officerTimer = 2;
-  }
-  for (const off of police.officers) {
-    const dx = px - off.x, dz = pz - off.z;
-    const d = Math.hypot(dx, dz) || 1;
-    off.angle = Math.atan2(dz, dx);
-    if (d > 1.8) {
-      off.x += (dx / d) * 7.5 * dt;
-      off.z += (dz / d) * 7.5 * dt;
-      off.bust = 0;
-    } else {
-      off.bust = (off.bust ?? 0) + dt;
-      if (off.bust > 1.2) {
-        // Cuffed: the bust plays out like being caught with no health.
-        state.player.hp = 0;
-        state.radioLine = 'Officer Reyes: you are coming with us. Hands where I can see them.';
-      }
-    }
-    resolveBuildings(state.buildings, off, 0.6);
-    off.x = Math.max(-255, Math.min(255, off.x));
-    off.z = Math.max(-205, Math.min(205, off.z));
-  }
-
   // The helicopter: orbits the player, rotor spinning, searchlight on.
   const heli = police.heli;
   if (state.wanted >= WANTED.heliAtStars) {
@@ -224,6 +173,71 @@ export function stepPolice(state, dt) {
   police.seen = seen;
 }
 
+const OFFICER_NAMES = ['REYES', 'KOVA', 'DUNN', 'SOL'];
+
+function deployOfficer(state) {
+  const police = state.police;
+  const p = state.player;
+  // Spawn on the nearest street, 15-30 m from the player.
+  const vx = STREETS_X.reduce((a, b) => (Math.abs(b - p.x) < Math.abs(a - p.x) ? b : a));
+  const hz = STREETS_Z.reduce((a, b) => (Math.abs(b - p.z) < Math.abs(a - p.z) ? b : a));
+  const along = 15 + state.rng() * 15;
+  const sign = state.rng() < 0.5 ? -1 : 1;
+  let x, z;
+  if (Math.abs(vx - p.x) < Math.abs(hz - p.z)) {
+    x = vx + (state.rng() < 0.5 ? 2.2 : -2.2);
+    z = p.z + sign * along;
+  } else {
+    x = p.x + sign * along;
+    z = hz + (state.rng() < 0.5 ? 2.2 : -2.2);
+  }
+  const id = police.nextOfficerId++;
+  police.officers.push({
+    id, name: OFFICER_NAMES[(id - 1) % OFFICER_NAMES.length],
+    x, z, angle: Math.atan2(p.z - z, p.x - x), cuff: 0,
+  });
+  if (!police.officerAnnounced) {
+    police.officerAnnounced = true;
+    state.dialogue = { who: 'officer', text: 'On foot now. You are not walking away from this.', until: state.time + 6 };
+    state.radioLine = 'Dispatch: foot patrol converging on the suspect.';
+  }
+}
+
+/** Foot patrol: officers deploy at 2+ stars while the player is on foot,
+ * chase at 7.5 m/s and cuff after 1.2 s of contact (hp 0 -> the normal
+ * busted flow). They never deploy while the player drives and stand down
+ * at zero stars. */
+export function stepOfficers(state, dt) {
+  const police = state.police;
+  const p = state.player;
+  if (state.wanted <= 0 || !p.onFoot) {
+    police.officers = [];
+    police.officerTimer = 0;
+    return;
+  }
+  police.officerTimer -= dt;
+  if (police.officers.length < 4 && state.wanted >= 2 && police.officerTimer <= 0) {
+    deployOfficer(state);
+    police.officerTimer = 2;
+  }
+  for (const o of police.officers) {
+    const dx = p.x - o.x, dz = p.z - o.z;
+    const d = Math.hypot(dx, dz) || 1;
+    o.angle = Math.atan2(dz, dx);
+    if (d > 1.6) {
+      o.x += (dx / d) * 7.5 * dt;
+      o.z += (dz / d) * 7.5 * dt;
+      o.cuff = 0;
+    } else {
+      o.cuff += dt;
+      if (o.cuff > 1.2) {
+        p.hp = 0; // busted: the world step runs the fine + hospital flow
+        return;
+      }
+    }
+  }
+}
+
 /** The police response panel: who is chasing, how far, what they are doing. */
 export function responseList(state) {
   const out = [];
@@ -235,14 +249,13 @@ export function responseList(state) {
     const doing = d < 12 ? 'RAMMING' : d < 40 ? 'PURSUIT' : 'RESPONDING';
     out.push({ name: `${names[i % names.length]}-${11 + i * 7}`, dist: d, doing });
   });
+  for (const o of state.police.officers) {
+    const d = Math.round(Math.hypot(o.x - px, o.z - pz));
+    out.push({ name: `OFC ${o.name}`, dist: d, doing: d < 3 ? 'CUFFING' : 'ON FOOT' });
+  }
   if (state.police.heli.active) {
     out.unshift({ name: 'AIR-1', dist: Math.round(Math.hypot(state.police.heli.x - px, state.police.heli.z - pz)), doing: 'SEARCHLIGHT' });
   }
-  const offNames = ['REYES', 'KOVA', 'DUNN', 'SOL'];
-  state.police.officers.forEach((off, i) => {
-    const d = Math.round(Math.hypot(off.x - px, off.z - pz));
-    out.push({ name: `OFC ${offNames[i % offNames.length]}`, dist: d, doing: d < 4 ? 'CUFFING' : 'ON FOOT' });
-  });
   return out;
 }
 

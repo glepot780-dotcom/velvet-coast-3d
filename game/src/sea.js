@@ -94,8 +94,9 @@ export function heliMesh(b, x, y, z, angle, rotor, colorHex = '#8b98ac') {
 
 /**
  * A low-poly car: body, cabin, wheels, headlights. `opts.police` adds the
- * black-and-white livery, the stripe and the flashing light bar. Local axes:
- * +x is forward, +z is the car's left; `at(lx, lz)` maps local to world.
+ * black-and-white livery, the stripe and the flashing light bar. Hood and
+ * trunk step down from the beltline, the glass slopes, the wheels carry
+ * silver rims; the Coral GT gets a rear spoiler.
  */
 export function carMesh(b, car, time) {
   const { x, z, angle, color, model } = car;
@@ -104,91 +105,92 @@ export function carMesh(b, car, time) {
   const main = isPolice ? hexToRgb(PALETTE.police) : body;
   const trim = isPolice ? hexToRgb(PALETTE.policeTrim) : shade(body, 0.6);
   const c = Math.cos(angle), s = Math.sin(angle);
-  const at = (lx, lz) => [x + lx * c - lz * s, z + lx * s + lz * c];
-  // Body + cabin.
+  // Local (lx, lz) -> world, for parts placed on the car's own axes.
+  const toW = (lx, lz) => [x + lx * c - lz * s, z + lx * s + lz * c];
+  const dark = hexToRgb('#14161a');
+  const glass = hexToRgb('#1c2733');
+  // Body + stepped hood and trunk.
   b.rotatedBox(x, 0.75, z, 4.4, 0.9, 2.0, angle, main, shade(main, 1.15));
-  b.rotatedBox(x - 0.2, 1.5, z, 2.4, 0.75, 1.8, angle, hexToRgb('#20242c'), hexToRgb('#2c313a'));
-  // Hood and trunk: lower, stepped ends so the car is not one slab.
-  const [hx, hz] = at(1.7, 0);
-  b.rotatedBox(hx, 0.62, hz, 1.2, 0.7, 1.9, angle, shade(main, 0.9), shade(main, 1.05));
-  const [tx, tz] = at(-1.8, 0);
-  b.rotatedBox(tx, 0.62, tz, 1.0, 0.7, 1.9, angle, shade(main, 0.85), shade(main, 1.0));
+  let p = toW(1.85, 0);
+  b.rotatedBox(p[0], 0.95, p[1], 0.7, 0.3, 1.9, angle, shade(main, 1.05), shade(main, 1.1));
+  p = toW(-1.85, 0);
+  b.rotatedBox(p[0], 0.95, p[1], 0.7, 0.3, 1.9, angle, shade(main, 1.05), shade(main, 1.1));
+  // Cabin.
+  p = toW(-0.2, 0);
+  b.rotatedBox(p[0], 1.5, p[1], 2.4, 0.75, 1.8, angle, hexToRgb('#20242c'), hexToRgb('#2c313a'));
+  // Sloped windshield and rear window (glass quads, normals up-and-out).
+  let a = toW(1.0, -0.8), d2 = toW(1.0, 0.8), e = toW(1.9, 0.8), f = toW(1.9, -0.8);
+  b.quad([a[0], 1.875, a[1]], [d2[0], 1.875, d2[1]], [e[0], 1.2, e[1]], [f[0], 1.2, f[1]], 0.6 * c, 0.8, 0.6 * s, glass, 0);
+  a = toW(-1.4, -0.8); d2 = toW(-1.4, 0.8); e = toW(-1.9, 0.8); f = toW(-1.9, -0.8);
+  b.quad([a[0], 1.875, a[1]], [d2[0], 1.875, d2[1]], [e[0], 1.2, e[1]], [f[0], 1.2, f[1]], -0.8 * c, 0.6, -0.8 * s, glass, 0);
+  // Sunroof + side mirrors.
+  p = toW(-0.2, 0);
+  b.rotatedBox(p[0], 1.9, p[1], 1.2, 0.08, 1.0, angle, glass, glass);
+  for (const side of [-1, 1]) {
+    p = toW(0.9, side * 1.0);
+    b.rotatedBox(p[0], 1.45, p[1], 0.25, 0.18, 0.12, angle, shade(main, 0.7));
+  }
   // Bumpers, grille, side skirts.
-  const bumper = hexToRgb(isPolice ? '#14161a' : '#3a3f47');
-  const [fx0, fz0] = at(2.32, 0);
-  b.rotatedBox(fx0, 0.45, fz0, 0.25, 0.5, 2.0, angle, bumper, bumper);
-  const [rx0, rz0] = at(-2.32, 0);
-  b.rotatedBox(rx0, 0.45, rz0, 0.25, 0.5, 2.0, angle, bumper, bumper);
-  const [gx, gz] = at(2.36, 0);
-  b.rotatedBox(gx, 0.78, gz, 0.08, 0.35, 1.4, angle, hexToRgb('#14161a'), hexToRgb('#14161a'));
-  b.rotatedBox(x, 0.32, z, 3.6, 0.22, 2.06, angle, hexToRgb('#14161a'), hexToRgb('#14161a'));
-  // Sloped windshield and rear window (glass quads, not boxes).
-  const glass = hexToRgb('#9fc6e8');
-  const w = (lx, y, lz) => [x + lx * c - lz * s, y, z + lx * s + lz * c];
-  const nx = 0.55 * c, ny = 0.75, nz = 0.55 * s;
-  b.quad(w(1.0, 1.85, -0.85), w(1.0, 1.85, 0.85), w(1.6, 1.05, 0.85), w(1.6, 1.05, -0.85),
-    nx, ny, nz, glass, 0);
-  b.quad(w(-1.4, 1.85, 0.85), w(-1.4, 1.85, -0.85), w(-1.9, 1.05, -0.85), w(-1.9, 1.05, 0.85),
-    -nx, ny, -nz, glass, 0);
-  // Sunroof and side mirrors.
-  const [sx, sz] = at(-0.2, 0);
-  b.rotatedBox(sx, 1.9, sz, 1.4, 0.06, 1.2, angle, hexToRgb('#14161a'), hexToRgb('#14161a'));
-  for (const side of [1, -1]) {
-    const [mx, mz] = at(0.9, side * 1.0);
-    b.rotatedBox(mx, 1.35, mz, 0.22, 0.18, 0.14, angle, main, main);
+  p = toW(2.25, 0);
+  b.rotatedBox(p[0], 0.45, p[1], 0.25, 0.35, 2.0, angle, dark);
+  p = toW(-2.25, 0);
+  b.rotatedBox(p[0], 0.45, p[1], 0.25, 0.35, 2.0, angle, dark);
+  p = toW(2.32, 0);
+  b.rotatedBox(p[0], 0.75, p[1], 0.1, 0.3, 1.2, angle, dark);
+  for (const side of [-1, 1]) {
+    p = toW(0, side * 1.02);
+    b.rotatedBox(p[0], 0.35, p[1], 3.6, 0.25, 0.12, angle, dark);
   }
   if (isPolice) {
     b.rotatedBox(x, 0.75, z, 4.45, 0.28, 2.02, angle, trim);
-    // Light bar, flashing red/blue.
+    // Light bar, flashing red/blue, plus a roof spotlight.
     const phase = Math.floor(time * 4) % 2 === 0;
     const bar = hexToRgb(phase ? '#ff2d2d' : '#2d5bff');
-    b.rotatedBox(x - 0.2, 2.05, z - 0.5, 0.7, 0.25, 0.5, angle, bar, bar, 2);
-    b.rotatedBox(x - 0.2, 2.05, z + 0.5, 0.7, 0.25, 0.5, angle, hexToRgb(phase ? '#2d5bff' : '#ff2d2d'), hexToRgb('#ffffff'), 2);
-    // Roof spotlight.
-    const [px, pz] = at(0.6, -0.95);
-    b.rotatedBox(px, 2.0, pz, 0.3, 0.25, 0.3, angle, hexToRgb('#e8e8e8'), hexToRgb('#ffffff'));
-  }
-  if (model === 'coral-gt') {
-    // Rear spoiler on the hero car.
-    for (const side of [1, -1]) {
-      const [px, pz] = at(-2.0, side * 0.7);
-      b.rotatedBox(px, 1.25, pz, 0.15, 0.4, 0.15, angle, main, main);
-    }
-    const [wx2, wz2] = at(-2.05, 0);
-    b.rotatedBox(wx2, 1.5, wz2, 0.5, 0.08, 1.9, angle, main, main);
+    p = toW(-0.2, -0.5);
+    b.rotatedBox(p[0], 2.05, p[1], 0.7, 0.25, 0.5, angle, bar, bar, 2);
+    p = toW(-0.2, 0.5);
+    b.rotatedBox(p[0], 2.05, p[1], 0.7, 0.25, 0.5, angle, hexToRgb(phase ? '#2d5bff' : '#ff2d2d'), hexToRgb('#ffffff'), 2);
+    p = toW(-0.2, 0);
+    b.rotatedBox(p[0], 1.98, p[1], 0.5, 0.15, 0.5, angle, hexToRgb('#fff3c4'), hexToRgb('#fff3c4'), 2);
   }
   // Wheels with silver rims.
   const wheel = hexToRgb('#14161a');
   const rim = hexToRgb('#c8ccd2');
   for (const [dx, dz] of [[1.5, 1.0], [1.5, -1.0], [-1.5, 1.0], [-1.5, -1.0]]) {
-    const [wx, wz] = at(dx, dz);
-    b.rotatedBox(wx, 0.42, wz, 0.85, 0.84, 0.3, angle, wheel);
-    b.rotatedBox(wx, 0.42, wz, 0.5, 0.5, 0.42, angle, rim, rim);
+    p = toW(dx, dz);
+    b.rotatedBox(p[0], 0.42, p[1], 0.85, 0.84, 0.3, angle, wheel);
+    p = toW(dx, dz + Math.sign(dz) * 0.17);
+    b.rotatedBox(p[0], 0.42, p[1], 0.5, 0.5, 0.08, angle, rim);
   }
-  // Headlights (emissive at dusk) and red taillights, on the true
-  // perpendicular so they sit right at any heading.
+  // Headlights on the true perpendicular (emissive at dusk) + red taillights.
   const hl = hexToRgb('#ffe9a8');
   const tl = hexToRgb('#ff2d2d');
-  const perp = [-s, c];
-  for (const side of [1, -1]) {
-    const hfx = x + 2.25 * c + perp[0] * side * 0.7;
-    const hfz = z + 2.25 * s + perp[1] * side * 0.7;
-    b.rotatedBox(hfx, 0.8, hfz, 0.25, 0.3, 0.45, angle, hl, hl, 2);
-    const trx = x - 2.25 * c + perp[0] * side * 0.7;
-    const trz = z - 2.25 * s + perp[1] * side * 0.7;
-    b.rotatedBox(trx, 0.8, trz, 0.25, 0.3, 0.45, angle, tl, tl, 2);
+  const fx = x + 2.25 * c, fz = z + 2.25 * s;
+  const px = -s, pz = c; // perpendicular to the car's heading
+  b.rotatedBox(fx + px * 0.7, 0.8, fz + pz * 0.7, 0.2, 0.3, 0.5, angle, hl, hl, 2);
+  b.rotatedBox(fx - px * 0.7, 0.8, fz - pz * 0.7, 0.2, 0.3, 0.5, angle, hl, hl, 2);
+  const bx = x - 2.25 * c, bz = z - 2.25 * s;
+  b.rotatedBox(bx + px * 0.7, 0.85, bz + pz * 0.7, 0.15, 0.25, 0.45, angle, tl, tl, 2);
+  b.rotatedBox(bx - px * 0.7, 0.85, bz - pz * 0.7, 0.15, 0.25, 0.45, angle, tl, tl, 2);
+  // Rear spoiler on the Coral GT.
+  if (model === 'coral-gt') {
+    p = toW(-2.1, 0);
+    b.rotatedBox(p[0], 1.45, p[1], 0.5, 0.12, 1.9, angle, dark, dark);
+    for (const side of [-1, 1]) {
+      p = toW(-2.1, side * 0.6);
+      b.rotatedBox(p[0], 1.3, p[1], 0.15, 0.25, 0.15, angle, dark);
+    }
   }
   return model;
 }
 
 /** A blocky person: legs, torso, arms, head. `walk` swings the legs.
- * `opts.police` dresses them as a VCPD officer: navy uniform, peaked cap,
- * gold badge. */
+ * `opts.police` dresses one as a VCPD officer: navy uniform, peaked cap
+ * with a brim and a gold badge. */
 export function personMesh(b, x, z, angle, colorHex, walk, time, opts = {}) {
-  const isPolice = !!opts.police;
-  const shirt = hexToRgb(isPolice ? '#1d4ed8' : colorHex);
+  const shirt = opts.police ? hexToRgb('#1d4ed8') : hexToRgb(colorHex);
   const skin = hexToRgb('#d9a066');
-  const pants = hexToRgb(isPolice ? '#141a2e' : '#2c3240');
+  const pants = hexToRgb('#2c3240');
   const swing = walk ? Math.sin(time * 9) * 0.5 : 0;
   const c = Math.cos(angle), s = Math.sin(angle);
   // Legs (swing opposite).
@@ -202,20 +204,19 @@ export function personMesh(b, x, z, angle, colorHex, walk, time, opts = {}) {
   b.rotatedBox(x, 2.15, z, 0.55, 0.55, 0.55, angle, skin, shade(skin, 1.1));
   const fx = Math.cos(angle), fz = Math.sin(angle);
   const px = -fz, pz = fx; // perpendicular
-  if (isPolice) {
-    // Peaked cap + brim + a gold badge on the chest.
-    const cap = hexToRgb('#141a2e');
-    b.rotatedBox(x - fx * 0.08, 2.44, z - fz * 0.08, 0.56, 0.16, 0.56, angle, cap, cap);
-    b.rotatedBox(x + fx * 0.3, 2.36, z + fz * 0.3, 0.3, 0.06, 0.5, angle, cap, cap);
-    const badge = hexToRgb('#ffd27a');
-    b.rotatedBox(x + fx * 0.44, 1.5, z + fz * 0.44, 0.06, 0.14, 0.14, angle, badge, badge, 2);
-  } else {
-    const hair = hexToRgb('#2b2b33');
-    b.rotatedBox(x - fx * 0.1, 2.42, z - fz * 0.1, 0.5, 0.18, 0.5, angle, hair, hair);
-  }
+  const hair = hexToRgb('#2b2b33');
+  b.rotatedBox(x - fx * 0.1, 2.42, z - fz * 0.1, 0.5, 0.18, 0.5, angle, hair, hair);
   const eye = hexToRgb('#14161a');
   for (const side of [-1, 1]) {
     b.rotatedBox(x + fx * 0.29 + px * side * 0.13, 2.2, z + fz * 0.29 + pz * side * 0.13,
       0.1, 0.1, 0.1, angle, eye, eye);
+  }
+  if (opts.police) {
+    // Peaked cap with a brim, and a gold badge on the chest.
+    const navy = hexToRgb('#16233d');
+    b.rotatedBox(x, 2.48, z, 0.6, 0.12, 0.6, angle, navy, navy);
+    b.rotatedBox(x + fx * 0.32, 2.42, z + fz * 0.32, 0.28, 0.06, 0.5, angle, navy, navy);
+    const gold = hexToRgb('#f2c94c');
+    b.rotatedBox(x + fx * 0.27, 1.45, z + fz * 0.27, 0.1, 0.15, 0.15, angle, gold, gold, 2);
   }
 }

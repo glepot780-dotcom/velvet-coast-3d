@@ -308,9 +308,9 @@ export function createRenderer(canvas) {
     for (const hostile of state.missions.hostiles) {
       if (hostile.hp > 0) personMesh(d, hostile.x, hostile.z, hostile.angle, hostile.color, true, time + hostile.x);
     }
-    // On-foot VCPD officers chasing the player.
-    for (const off of state.police.officers) {
-      personMesh(d, off.x, off.z, off.angle, '#1d4ed8', true, time + off.x, { police: true });
+    // Foot patrol: navy uniforms, peaked caps.
+    for (const o of state.police.officers) {
+      personMesh(d, o.x, o.z, o.angle, '#1d4ed8', true, time + o.x, { police: true });
     }
     // The player on foot.
     const p = state.player;

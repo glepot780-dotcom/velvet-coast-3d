@@ -11,7 +11,7 @@ import {
   createTraffic, insideBuilding, nearestCar, resolveBuildings, scarePeds,
   spawnParkedCar, stepTraffic,
 } from './traffic.js';
-import { addHeat, createPolice, dispatchLine, dropWanted, stepPolice } from './police.js';
+import { addHeat, createPolice, dispatchLine, dropWanted, stepOfficers, stepPolice } from './police.js';
 import {
   createMissionState, currentMission, loadProgress, saveProgress, startMission,
   stepHostiles, updateMissions,
@@ -381,14 +381,14 @@ function stepDriving(state, input, dt) {
   }
 }
 
-/** The chase camera: close behind and above the player, smoothed, so the
- * car and the player read big and the 3D depth is unmistakable. */
+/** The chase camera: behind and above the player, smoothed. Closer and
+ * lower than before, so the car reads big and the street has depth. */
 function stepCamera(state, dt) {
   const p = state.player;
   const cam = state.camera;
   if (state.screen === 'title') return; // the title shot sets its own camera
-  const dist = 6;
-  const height = 2.6;
+  const dist = p.onFoot ? 6.5 : 6;
+  const height = p.onFoot ? 2.8 : 2.6;
   const fx = Math.cos(p.angle), fz = Math.sin(p.angle);
   const tx = p.x - fx * dist;
   const tz = p.z - fz * dist;
@@ -445,6 +445,7 @@ export function stepWorld(state, input, dt) {
 
   stepTraffic(state, dt);
   stepPolice(state, dt);
+  stepOfficers(state, dt);
   stepHostiles(state, dt);
   updateMissions(state, dt);
   stepCamera(state, dt);

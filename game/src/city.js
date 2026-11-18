@@ -1,7 +1,7 @@
 // Meridian Bay: the static island. buildCity lays out the ground, the street grid,
 // the buildings (with their collision boxes), the beach, the marina docks and the
 // airfield, all as one triangle soup. The sea is sea.js; the city never moves.
-import { DISTRICTS, MISSIONS, PALETTE, PLACES, STREETS_X, STREETS_Z, STREET_HALF, WORLD } from './config.js';
+import { DISTRICTS, PALETTE, PLACES, STREETS_X, STREETS_Z, STREET_HALF, WORLD } from './config.js';
 import { hexToRgb, MeshBuilder, shade } from './mesh.js';
 import { int, pick, range } from './random.js';
 
@@ -29,16 +29,6 @@ export function buildCity(rng) {
   const mesh = new MeshBuilder();
   const buildings = [];
   const palms = [];
-
-  // Points no random building may cover: every named place, every ledger
-  // pickup, and the bank's front columns. A building whose footprint (plus a
-  // 3 m margin) would cover one of these is skipped outright.
-  const KEEP_CLEAR = [
-    ...Object.values(PLACES).map((p) => [p.x, p.z]),
-    ...MISSIONS.flatMap((m) => m.stages.flatMap((st) => st.points ?? [])),
-    [PLACES.bank.x - 9, PLACES.bank.z + 11],
-    [PLACES.bank.x + 9, PLACES.bank.z + 11],
-  ];
 
   const grass = hexToRgb(PALETTE.grass);
   const asphalt = hexToRgb(PALETTE.asphalt);
@@ -85,6 +75,13 @@ export function buildCity(rng) {
   const roofCols = PALETTE.roof.map(hexToRgb);
   const litWin = hexToRgb(PALETTE.windowLit);
   const darkWin = hexToRgb(PALETTE.windowDark);
+  // Points no random building may cover (3 m of margin): every named place,
+  // the mission-4 ledger pickups and the bank's front columns.
+  const KEEP_CLEAR = [
+    ...Object.values(PLACES).map((p) => [p.x, p.z]),
+    [-80, 120], [-20, 170], [-120, 100], // mission 4 ledgers
+    [71, -29], [77, -29], [83, -29], [89, -29], // bank columns
+  ];
   for (const [bx0, bx1] of xBlocks) {
     if (bx1 <= -195 || bx0 > 178) continue; // the beach strip and the airfield
     for (const [bz0, bz1] of zBlocks) {
@@ -99,74 +96,66 @@ export function buildCity(rng) {
         let cz = bz0 + bd / 2 + range(rng, -3, 3);
         cx = Math.max(bx0 + w / 2 + 2, Math.min(bx1 - w / 2 - 2, cx));
         cz = Math.max(bz0 + d / 2 + 2, Math.min(bz1 - d / 2 - 2, cz));
+        // KEEP_CLEAR: skip any footprint that would cover a named place,
+        // a ledger pickup or a bank column (each with 3 m of margin).
+        const kx0 = cx - w / 2 - 3, kx1 = cx + w / 2 + 3;
+        const kz0 = cz - d / 2 - 3, kz1 = cz + d / 2 + 3;
+        if (KEEP_CLEAR.some(([px, pz]) => px > kx0 && px < kx1 && pz > kz0 && pz < kz1)) continue;
         const downtown = 1 - Math.min(1, centreDistance(cx, cz) / 320);
         const h = range(rng, 8, 12) + downtown * range(rng, 6, 34);
         const col = pick(rng, buildingCols);
         const roof = pick(rng, roofCols);
-        // Keep mission targets and named places clear: a random block must
-        // never bury a ledger, a safehouse or a landmark's front.
-        const coversPoint = KEEP_CLEAR.some(([kx, kz]) =>
-          cx - w / 2 - 3 < kx && kx < cx + w / 2 + 3 && cz - d / 2 - 3 < kz && kz < cz + d / 2 + 3);
-        if (coversPoint) continue;
+        // Darker ground-floor base and a parapet rim, so the block reads as
+        // a built thing rather than a plain box.
+        mesh.box(cx, 1.2, cz, w + 0.8, 2.4, d + 0.8, shade(col, 0.55), shade(col, 0.5));
         mesh.box(cx, h / 2, cz, w, h, d, col, roof);
+        mesh.box(cx, h + 0.25, cz, w + 0.5, 0.5, d + 0.5, roof, roof);
         buildings.push({ x0: cx - w / 2, z0: cz - d / 2, x1: cx + w / 2, z1: cz + d / 2, h });
-        // A darker ground-floor base and a parapet rim: the box reads as a
-        // building, not a slab.
-        mesh.box(cx, 1.1, cz, w + 0.7, 2.2, d + 0.7, shade(col, 0.55), shade(col, 0.5));
-        mesh.box(cx, h + 0.45, cz, w + 0.5, 0.9, d + 0.5, shade(col, 0.75), shade(col, 0.7));
-        // Lit windows on all four faces, denser downtown.
+        // Lit windows on ALL FOUR faces, denser downtown.
         const floors = Math.max(1, Math.floor(h / 4));
         const perFloor = downtown > 0.5 ? 3 : 2;
-        for (let f = 0; f < floors; f += 1) {
-          const y = 2.2 + f * 3.6;
-          if (y > h - 1.5) break;
-          for (let s = 0; s < perFloor; s += 1) {
-            const wx = cx - w / 2 + ((s + 1) / (perFloor + 1)) * w;
-            const lit = rng() < 0.55;
-            const winCol = lit ? litWin : darkWin;
-            const flag = lit ? 2 : 0;
-            mesh.quad([wx - 0.9, y, cz + d / 2 + 0.06], [wx + 0.9, y, cz + d / 2 + 0.06],
-              [wx + 0.9, y + 1.5, cz + d / 2 + 0.06], [wx - 0.9, y + 1.5, cz + d / 2 + 0.06],
-              0, 0, 1, winCol, flag);
-            mesh.quad([wx + 0.9, y, cz - d / 2 - 0.06], [wx - 0.9, y, cz - d / 2 - 0.06],
-              [wx - 0.9, y + 1.5, cz - d / 2 - 0.06], [wx + 0.9, y + 1.5, cz - d / 2 - 0.06],
-              0, 0, -1, winCol, flag);
-          }
-          for (let s = 0; s < 2; s += 1) {
-            const wz = cz - d / 2 + ((s + 1) / 3) * d;
-            const lit = rng() < 0.55;
-            const winCol = lit ? litWin : darkWin;
-            const flag = lit ? 2 : 0;
-            mesh.quad([cx + w / 2 + 0.06, y, wz - 0.9], [cx + w / 2 + 0.06, y, wz + 0.9],
-              [cx + w / 2 + 0.06, y + 1.5, wz + 0.9], [cx + w / 2 + 0.06, y + 1.5, wz - 0.9],
-              1, 0, 0, winCol, flag);
-            mesh.quad([cx - w / 2 - 0.06, y, wz + 0.9], [cx - w / 2 - 0.06, y, wz - 0.9],
-              [cx - w / 2 - 0.06, y + 1.5, wz - 0.9], [cx - w / 2 - 0.06, y + 1.5, wz + 0.9],
-              -1, 0, 0, winCol, flag);
+        const faces = [
+          { ax: 'x', at: cz + d / 2 + 0.06, n: [0, 0, 1], c: cx, s: w },
+          { ax: 'x', at: cz - d / 2 - 0.06, n: [0, 0, -1], c: cx, s: w },
+          { ax: 'z', at: cx + w / 2 + 0.06, n: [1, 0, 0], c: cz, s: d },
+          { ax: 'z', at: cx - w / 2 - 0.06, n: [-1, 0, 0], c: cz, s: d },
+        ];
+        for (const fc of faces) {
+          for (let f = 0; f < floors; f += 1) {
+            const y = 2.2 + f * 3.6;
+            if (y > h - 1.5) break;
+            for (let s2 = 0; s2 < perFloor; s2 += 1) {
+              const a = fc.c - fc.s / 2 + ((s2 + 1) / (perFloor + 1)) * fc.s;
+              const lit = rng() < 0.55;
+              const wc = lit ? litWin : darkWin;
+              if (fc.ax === 'x') {
+                mesh.quad([a - 0.9, y, fc.at], [a + 0.9, y, fc.at], [a + 0.9, y + 1.5, fc.at], [a - 0.9, y + 1.5, fc.at], fc.n[0], fc.n[1], fc.n[2], wc, lit ? 2 : 0);
+              } else {
+                mesh.quad([fc.at, y, a - 0.9], [fc.at, y, a + 0.9], [fc.at, y + 1.5, a + 0.9], [fc.at, y + 1.5, a - 0.9], fc.n[0], fc.n[1], fc.n[2], wc, lit ? 2 : 0);
+              }
+            }
           }
         }
-        // A lighter vertical accent stripe on some facades.
-        if (rng() < 0.35) {
-          const ax = cx + range(rng, -w / 3, w / 3);
-          mesh.quad([ax - 1.1, 2.4, cz + d / 2 + 0.08], [ax + 1.1, 2.4, cz + d / 2 + 0.08],
-            [ax + 1.1, h - 1, cz + d / 2 + 0.08], [ax - 1.1, h - 1, cz + d / 2 + 0.08],
+        // Vertical accent stripes on the front face.
+        for (const off of [-w / 3, w / 3]) {
+          mesh.quad([cx + off - 0.4, 0.1, cz + d / 2 + 0.07], [cx + off + 0.4, 0.1, cz + d / 2 + 0.07],
+            [cx + off + 0.4, h - 0.5, cz + d / 2 + 0.07], [cx + off - 0.4, h - 0.5, cz + d / 2 + 0.07],
             0, 0, 1, shade(col, 1.3), 0);
         }
-        // Tall towers get a stepped crown; the tallest get an antenna beacon.
-        if (h > 26) {
-          mesh.box(cx, h + 2.2, cz, w * 0.55, 4.4, d * 0.55, shade(col, 0.9), shade(col, 0.8));
+        // Stepped crown on towers, antenna + red beacon on the tallest.
+        if (h > 26) mesh.box(cx, h + 1.2, cz, w * 0.6, 2.4, d * 0.6, shade(col, 0.9), roof);
+        if (h > 30) {
+          mesh.prism(cx, h + 2.4, cz, 0.15, 5, 4, hexToRgb('#2a2f3a'));
+          mesh.box(cx, h + 7.6, cz, 0.8, 0.8, 0.8, hexToRgb('#ff2d2d'), hexToRgb('#ff2d2d'), 2);
         }
-        if (h > 30 && rng() < 0.5) {
-          mesh.prism(cx, h + 4, cz, 0.15, 7, 5, hexToRgb('#2a2f3a'));
-          mesh.box(cx, h + 11.4, cz, 0.7, 0.7, 0.7, hexToRgb('#ff2d2d'), hexToRgb('#ff2d2d'), 2);
-        }
-        // Rooftop boxes on some buildings.
+        // Rooftop boxes (AC units) on some buildings.
         if (rng() < 0.4) {
           mesh.box(cx + range(rng, -w / 4, w / 4), h + 0.8, cz + range(rng, -d / 4, d / 4),
             range(rng, 3, 6), 1.6, range(rng, 3, 5), shade(col, 0.7), shade(col, 0.6));
         }
         if (rng() < 0.3) {
-          mesh.box(cx - w / 4, h + 0.7, cz + d / 4, 3, 1.4, 3, shade(col, 0.6), shade(col, 0.55));
+          mesh.box(cx + range(rng, -w / 4, w / 4), h + 0.5, cz + range(rng, -d / 4, d / 4),
+            range(rng, 2, 3.5), 1, range(rng, 2, 3), shade(col, 0.6), shade(col, 0.55));
         }
       }
     }
@@ -188,21 +177,33 @@ export function buildCity(rng) {
   landmark(PLACES.garage.x, PLACES.garage.z, 26, 10, 20, '#3f5a6e', '#ff5fa2', "Ivy's Garage");
   landmark(PLACES.hospital.x, PLACES.hospital.z, 24, 16, 18, '#d8dde2', '#7ee2a8', 'Meridian General');
   landmark(PLACES.safehouse.x, PLACES.safehouse.z, 14, 7, 12, '#6a7d5e', null, 'Safehouse');
-  landmark(PLACES.bank.x, PLACES.bank.z, 26, 14, 20, '#d8c9a3', '#ffd27a', 'Meridian Bay Bank');
-  landmark(PLACES.policeHQ.x, PLACES.policeHQ.z, 22, 12, 18, '#2c3e6e', '#5b8cff', 'VCPD Headquarters');
-  // Bank columns + pediment: a stone front that reads as a bank at a glance.
+  // Meridian Bay Bank: cream stone, gold sign, columns and a pediment.
+  landmark(PLACES.bank.x, PLACES.bank.z, 26, 12, 20, '#e8dcc0', '#f2c94c', 'Meridian Bay Bank');
+  const bankCol = hexToRgb('#f2ead2');
   for (const ox of [-9, -3, 3, 9]) {
-    mesh.prism(PLACES.bank.x + ox, 0, PLACES.bank.z + 11, 0.7, 8, 6, hexToRgb('#f2ead8'));
+    mesh.box(PLACES.bank.x + ox, 5, PLACES.bank.z + 11.2, 1.1, 10, 1.1, bankCol, bankCol);
   }
-  mesh.box(PLACES.bank.x, 15.2, PLACES.bank.z, 14, 2.4, 3, hexToRgb('#c9b183'), hexToRgb('#b39a68'));
-  // Hospital: a glowing red cross on the roof and one on the front wall.
-  const cross = hexToRgb('#e5484d');
-  mesh.box(PLACES.hospital.x, 16.9, PLACES.hospital.z, 7, 1.8, 2.2, cross, cross, 2);
-  mesh.box(PLACES.hospital.x, 16.9, PLACES.hospital.z, 2.2, 1.8, 7, cross, cross, 2);
-  mesh.quad([59, 7, -86.92], [61, 7, -86.92], [61, 11, -86.92], [59, 11, -86.92], 0, 0, 1, cross, 2);
-  mesh.quad([58, 8, -86.92], [62, 8, -86.92], [62, 10, -86.92], [58, 10, -86.92], 0, 0, 1, cross, 2);
-  // Police HQ: a blue beacon on the roof.
-  mesh.box(PLACES.policeHQ.x, 13, PLACES.policeHQ.z, 1.4, 1.8, 1.4, hexToRgb('#2d5bff'), hexToRgb('#2d5bff'), 2);
+  mesh.box(PLACES.bank.x, 11.2, PLACES.bank.z + 11.2, 26, 1.6, 2.4, bankCol, bankCol); // entablature
+  {
+    const bx = PLACES.bank.x, bz = PLACES.bank.z + 11.3;
+    const cream = hexToRgb('#efe6cc');
+    const i0 = mesh.vertex(bx - 13, 12, bz, 0, 0, 1, cream, 0);
+    const i1 = mesh.vertex(bx + 13, 12, bz, 0, 0, 1, cream, 0);
+    const i2 = mesh.vertex(bx, 16, bz, 0, 0, 1, cream, 0);
+    mesh.tri(i0, i1, i2); // pediment
+  }
+  // Hospital: a glowing red cross on the roof and on the front wall.
+  const cross = hexToRgb('#ff2d2d');
+  mesh.box(PLACES.hospital.x, 16.3, PLACES.hospital.z, 8, 0.5, 2.4, cross, cross, 2);
+  mesh.box(PLACES.hospital.x, 16.3, PLACES.hospital.z, 2.4, 0.5, 8, cross, cross, 2);
+  mesh.quad([PLACES.hospital.x - 1.2, 8, PLACES.hospital.z + 9.08], [PLACES.hospital.x + 1.2, 8, PLACES.hospital.z + 9.08],
+    [PLACES.hospital.x + 1.2, 14, PLACES.hospital.z + 9.08], [PLACES.hospital.x - 1.2, 14, PLACES.hospital.z + 9.08], 0, 0, 1, cross, 2);
+  mesh.quad([PLACES.hospital.x - 3, 10, PLACES.hospital.z + 9.08], [PLACES.hospital.x + 3, 10, PLACES.hospital.z + 9.08],
+    [PLACES.hospital.x + 3, 12.4, PLACES.hospital.z + 9.08], [PLACES.hospital.x - 3, 12.4, PLACES.hospital.z + 9.08], 0, 0, 1, cross, 2);
+  // VCPD Headquarters: dark blue, blue sign, a roof beacon.
+  landmark(PLACES.policeHQ.x, PLACES.policeHQ.z, 28, 18, 22, '#1e3a6e', '#3b82f6', 'VCPD Headquarters');
+  mesh.box(PLACES.policeHQ.x, 19, PLACES.policeHQ.z, 1.4, 1.4, 1.4, hexToRgb('#3b82f6'), hexToRgb('#3b82f6'), 2);
+  mesh.prism(PLACES.policeHQ.x, 19.6, PLACES.policeHQ.z, 0.15, 4, 4, hexToRgb('#2a2f3a'));
 
   // The airfield: runway, taxiway, hangar, control tower.
   const runway = hexToRgb('#2c2f36');

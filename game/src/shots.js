@@ -7,9 +7,8 @@
 //              in the sky, sunset, city behind. NO airplane in this shot.
 //  2 chase   — MISSION FAILED on the main road: Jax on foot in the middle
 //              of the NEON AVE x TIDE ST intersection, boxed in by five
-//              police cars on the asphalt and four officers closing in,
-//              helicopter overhead, five stars, MISSION FAILED banner.
-//              On the road, NOT on the beach. (Alif's directions.)
+//              police cars and four officers on foot, helicopter overhead,
+//              five stars, the big red MISSION FAILED banner.
 //  3 weapons — the moment of switching weapons: the weapon wheel OPEN, slots
 //              visible, one highlighted.
 //  4 map     — the full city map screen.
@@ -41,57 +40,52 @@ export function stageShot(name, state, stepWorld) {
   state.respect = 4;
 
   if (name === 'chase') {
-    // MISSION FAILED on the main road (Alif: "dijalan raya ya mo jangan di
-    // pantai", "mission failed dikepung polisi", "kasih mobil polisinya
-    // juga"). Jax on foot in the middle of the NEON AVE x TIDE ST
-    // intersection, boxed in by five VCPD interceptors on the asphalt and
-    // four officers closing in on foot, helicopter overhead, five stars,
-    // MISSION FAILED banner from the HUD (state.failedBanner). Nothing is
-    // settled forward: the shot paints the staged state exactly, so every
-    // position here is final. Every car sits on the road, never inside a
-    // building block; the south side stays open for the camera.
-    startMission(state, 5); // HEAT WAVE: four stars, helicopter, escape
+    // MISSION FAILED, boxed in on the main road: Jax on foot in the middle
+    // of the NEON AVE x TIDE ST intersection, five VCPD interceptors on the
+    // asphalt facing in, four officers on foot at 6 m on every side, the
+    // helicopter overhead. Nothing settles forward — the shot paints the
+    // staged state exactly, on the road, not the beach.
+    startMission(state, 5); // HEAT WAVE: four stars from the escape stage
     state.missions.banner = null;
     state.dialogue = null;
-    addHeat(state, 1); // five stars in all
-    // Jax on foot in the middle of the intersection, facing the camera.
-    state.player.x = 40; state.player.z = 0; state.player.angle = Math.PI / 2;
-    state.player.onFoot = true; state.player.car = null; state.player.speed = 0;
-    // Five interceptors boxed in around him, all on the asphalt, facing in:
-    // three blocking Neon Ave ahead of him, one each side on Tide St —
-    // pulled in to ~34° off the camera axis so they read in frame, not as
-    // slivers at the edges.
-    const ring = [
+    addHeat(state, 1); // five stars
+    state.radioLine = 'Dispatch: FIVE STARS. Air-1 overhead. Nobody lets this one go.';
+    state.player.onFoot = true;
+    state.player.car = null;
+    state.player.x = 40; state.player.z = 0;
+    state.player.angle = Math.PI / 2; // facing the camera, south
+    state.player.hp = 100;
+    // Five interceptors on the asphalt: three blocking Neon Ave ahead, one
+    // on each side of Tide St, all facing the player.
+    const spots = [
       [40, -13, Math.PI / 2], [40, -26, Math.PI / 2], [40, -38, Math.PI / 2],
-      [30, -4, 0], [50, -4, Math.PI],
+      [30, -4, 0.38], [50, -4, Math.PI - 0.38],
     ];
-    for (const [x, z, angle] of ring) {
-      const pc = makeCar('police', { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 }, x, z, angle);
+    for (const [x, z, a] of spots) {
+      const pc = makeCar('police', { key: 'interceptor', name: 'VCPD INTERCEPTOR', color: '#e8e8e8', top: 44 }, x, z, a);
       pc.speed = 0;
       state.cars.push(pc);
       state.police.cars.push(pc.id);
     }
-    // Four officers on foot, closing in from every side of the intersection.
-    const officers = [
-      [36, 4, -Math.PI / 4], [44, 4, -3 * Math.PI / 4],
-      [36, -4, Math.PI / 4], [44, -4, 3 * Math.PI / 4],
-    ];
-    for (const [x, z, angle] of officers) {
-      state.police.officers.push({ x, z, angle, bust: 0 });
+    // Four officers on foot at 6 m on every side.
+    const names = ['REYES', 'KOVA', 'DUNN', 'SOL'];
+    for (let i = 0; i < 4; i += 1) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      state.police.officers.push({
+        id: i + 1, name: names[i],
+        x: 40 + Math.cos(a) * 6, z: Math.sin(a) * 6,
+        angle: Math.atan2(-Math.sin(a), -Math.cos(a)), cuff: 0,
+      });
     }
-    // The helicopter overhead, directly above the road ahead so it stays
-    // inside the frame (high and off-axis puts it above the top edge) and
-    // clear of every building.
+    // The helicopter overhead above the road.
     state.police.heli.active = true;
     state.police.heli.x = 40; state.police.heli.y = 20; state.police.heli.z = -45;
-    state.police.heli.angle = Math.PI * 0.75;
-    state.radioLine = 'Dispatch: FIVE STARS. Air-1 overhead. Nobody lets this one go.';
-    state.failedBanner = { title: 'MISSION FAILED', sub: 'Boxed in on Neon Ave. The VCPD has you now.' };
-    // Camera just outside the ring on the south side, low and close, looking
-    // north up Neon Ave: Jax centre-frame below the banner, the ring around
-    // him, the road and the buildings running away behind.
+    state.police.heli.angle = Math.PI / 2;
+    // Low, close camera from the south, looking at the player.
     state.camera.x = 40; state.camera.y = 4.2; state.camera.z = 11;
     state.camera.lx = 40; state.camera.ly = 1.0; state.camera.lz = -4;
+    // The banner: big red MISSION FAILED, unmistakable at any size.
+    state.failedBanner = { text: 'Boxed in on Neon Ave. The VCPD has you now.' };
     state.screen = 'play';
     return 'play';
   }
